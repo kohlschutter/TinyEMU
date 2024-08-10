@@ -208,7 +208,7 @@ static const VirtMachineClass *virt_machine_list[] = {
     NULL,
 };
 
-static const VirtMachineClass *virt_machine_find_class(const char *machine_name)
+const VirtMachineClass *virt_machine_find_class(const char *machine_name)
 {
     const VirtMachineClass *vmc, **pvmc;
     
@@ -220,7 +220,7 @@ static const VirtMachineClass *virt_machine_find_class(const char *machine_name)
     return NULL;
 }
 
-static int virt_machine_parse_config(VirtMachineParams *p,
+int virt_machine_parse_config(VirtMachineParams *p,
                                      char *config_file_str, int len)
 {
     int version, val;
