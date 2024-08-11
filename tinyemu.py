@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os, sys, subprocess, ctypes
+import os, sys, subprocess, ctypes, time
 from datetime import datetime
 
 LIBTEMU = '/tmp/libtemu.so'
@@ -180,12 +180,13 @@ void temu_load( const char *bios, int len ){
 	printf("vmc->virt_machine_set_defaults:%p\\n", p->vmc->virt_machine_set_defaults);
 	printf("vmc->virt_machine_init:%p\\n", p->vmc->virt_machine_init);
 	p->vmc->virt_machine_set_defaults(p);
-	p->ram_size = 100 << 20;
-	p->files[VM_FILE_BIOS].filename = strdup("/bios");
+	p->ram_size = 2000 << 20;
+	p->files[VM_FILE_BIOS].filename = "/bios";
 	p->files[VM_FILE_BIOS].buf = malloc(len);
 	p->files[VM_FILE_BIOS].len = len;
 	memcpy(p->files[VM_FILE_BIOS].buf, bios, len);
 
+	p->input_device = "virtio";
 	p->display_device = "simplefb";
 	p->width = 320;
 	p->height = 200;
@@ -202,6 +203,38 @@ def gen_api():
 	open(tmp,'wb').write('\n'.join(api).encode('utf-8'))
 	return tmp
 
+
+## https://github.com/qemu/qemu/blob/master/hw/riscv/virt.c
+'''
+static const MemMapEntry virt_memmap[] = {
+    [VIRT_DEBUG] =        {        0x0,         0x100 },
+    [VIRT_MROM] =         {     0x1000,        0xf000 },
+    [VIRT_TEST] =         {   0x100000,        0x1000 },
+    [VIRT_RTC] =          {   0x101000,        0x1000 },
+    [VIRT_CLINT] =        {  0x2000000,       0x10000 },
+    [VIRT_ACLINT_SSWI] =  {  0x2F00000,        0x4000 },
+    [VIRT_PCIE_PIO] =     {  0x3000000,       0x10000 },
+    [VIRT_PLATFORM_BUS] = {  0x4000000,     0x2000000 },
+    [VIRT_PLIC] =         {  0xc000000, VIRT_PLIC_SIZE(VIRT_CPUS_MAX * 2) },
+    [VIRT_APLIC_M] =      {  0xc000000, APLIC_SIZE(VIRT_CPUS_MAX) },
+    [VIRT_APLIC_S] =      {  0xd000000, APLIC_SIZE(VIRT_CPUS_MAX) },
+    [VIRT_UART0] =        { 0x10000000,         0x100 },
+    [VIRT_VIRTIO] =       { 0x10001000,        0x1000 },
+    [VIRT_FW_CFG] =       { 0x10100000,          0x18 },
+    [VIRT_FLASH] =        { 0x20000000,     0x4000000 },
+    [VIRT_IMSIC_M] =      { 0x24000000, VIRT_IMSIC_MAX_SIZE },
+    [VIRT_IMSIC_S] =      { 0x28000000, VIRT_IMSIC_MAX_SIZE },
+    [VIRT_PCIE_ECAM] =    { 0x30000000,    0x10000000 },
+    [VIRT_PCIE_MMIO] =    { 0x40000000,    0x40000000 },
+    [VIRT_DRAM] =         { 0x80000000,           0x0 },
+};
+'''
+
+QEMU_VIRT = [
+	#'PLIC_BASE_ADDR=0x40000000',
+	'FRAMEBUFFER_BASE_ADDR=0x30000000',
+]
+
 def compile(c, output=None, defs=None):
 	if output:
 		assert c != output
@@ -215,16 +248,12 @@ def compile(c, output=None, defs=None):
 		"-fPIC",  ## position indepenent code
 		'-DCONFIG_VERSION="%s"' % datetime.today().strftime('%Y-%m-%d'),
 		'-DCONFIG_SDL', '-DCONFIG_RISCV_MAX_XLEN=128', 
-		'-DDUMP_INVALID_MEM_ACCESS',
-		'-DDUMP_MMU_EXCEPTIONS',
-		'-DDUMP_INTERRUPTS',
-		'-DDUMP_INVALID_CSR',
-		'-DDUMP_EXCEPTIONS',
-		'-DDUMP_CSR',
-
+		'-DDUMP_INVALID_MEM_ACCESS', '-DDUMP_MMU_EXCEPTIONS',
+		'-DDUMP_INTERRUPTS', '-DDUMP_INVALID_CSR',
+		'-DDUMP_EXCEPTIONS', '-DDUMP_CSR', '-DDEBUG_VGA_REG', 
+		'-DABORT_ON_FAIL',
 		#'-DCONFIG_X86EMU', #'-DCONFIG_COMPRESSED_INITRAMFS',
-		"-o", ofile, c,
-	]
+		] + ['-D'+d for d in QEMU_VIRT] + ["-o", ofile, c ]
 	if defs: cmd += defs
 	print(cmd)
 	subprocess.check_call(cmd)
@@ -250,11 +279,30 @@ def build():
 	print(obs)
 	link(obs)
 
+def qemu(exe, bits=64, vga=True, gdb=False, stdin=None, stdout=None, mem='256M', mach='virt'):
+	if bits==32: q = 'qemu-system-riscv32'
+	else: q = 'qemu-system-riscv64'
+	cmd = [q, '-machine', mach, '-m', mem]
+	if vga: cmd += ['-device', 'VGA']
+	else: cmd += ['-display', 'none']
+	cmd += [ '-serial',  'stdio', '-bios', exe ]
+	if gdb: cmd += ['-gdb', 'tcp:localhost:1234,server,ipv4']
+	print(cmd)
+	return subprocess.Popen(cmd, stdin=stdin, stdout=stdout)
+
+
 def test():
 	if not os.path.isfile(LIBTEMU): build()
 	elf = '/tmp/test.elf'
 	for arg in sys.argv:
 		if arg.endswith( ('.elf', '.bin') ): elf = arg
+	print('symbol dump:', elf)
+	os.system('riscv64-unknown-elf-nm %s' % elf)
+	if '--qemu' in sys.argv:
+		p = qemu(elf)
+		time.sleep(6)
+		p.kill()
+	print('loading:', elf)
 	dll = ctypes.CDLL(LIBTEMU)
 	print(dll)
 	print(dll.temu_load)
