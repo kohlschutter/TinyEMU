@@ -64,17 +64,46 @@ typedef struct RISCVMachine {
     int virtio_count;
 } RISCVMachine;
 
-#define LOW_RAM_SIZE   0x00010000 /* 64KB */
-#define RAM_BASE_ADDR  0x80000000
-#define CLINT_BASE_ADDR 0x02000000
-#define CLINT_SIZE      0x000c0000
-#define DEFAULT_HTIF_BASE_ADDR 0x40008000
-#define VIRTIO_BASE_ADDR 0x40010000
-#define VIRTIO_SIZE      0x1000
-#define VIRTIO_IRQ       1
-#define PLIC_BASE_ADDR 0x40100000
-#define PLIC_SIZE      0x00400000
-#define FRAMEBUFFER_BASE_ADDR 0x41000000
+#ifndef LOW_RAM_SIZE
+    #define LOW_RAM_SIZE   0x00010000 /* 64KB */
+#endif
+#ifndef RAM_BASE_ADDR
+    #define RAM_BASE_ADDR  0x80000000
+#endif
+#ifndef CLINT_BASE_ADDR
+    #define CLINT_BASE_ADDR 0x02000000
+#endif
+#ifndef CLINT_SIZE
+    #define CLINT_SIZE      0x000c0000
+#endif
+#ifndef DEFAULT_HTIF_BASE_ADDR
+    #define DEFAULT_HTIF_BASE_ADDR 0x40008000
+#endif
+#ifndef VIRTIO_BASE_ADDR
+    #define VIRTIO_BASE_ADDR 0x40010000
+#endif
+#ifndef VIRTIO_SIZE
+    #define VIRTIO_SIZE      0x1000
+#endif
+#ifndef VIRTIO_IRQ
+    #define VIRTIO_IRQ       1
+#endif
+#ifndef PLIC_BASE_ADDR
+    #define PLIC_BASE_ADDR 0x40100000
+#endif
+#ifndef PLIC_SIZE
+    #define PLIC_SIZE      0x00400000
+#endif
+#ifndef FRAMEBUFFER_BASE_ADDR
+    #define FRAMEBUFFER_BASE_ADDR 0x41000000
+#endif
+
+#ifndef PLIC_HART_BASE
+    #define PLIC_HART_BASE 0x200000
+#endif
+#ifndef PLIC_HART_SIZE
+    #define PLIC_HART_SIZE 0x1000
+#endif
 
 #define RTC_FREQ 10000000
 #define RTC_FREQ_DIV 16 /* arbitrary, relative to CPU freq to have a
@@ -250,9 +279,6 @@ static void plic_update_mip(RISCVMachine *s)
         riscv_cpu_reset_mip(cpu, MIP_MEIP | MIP_SEIP);
     }
 }
-
-#define PLIC_HART_BASE 0x200000
-#define PLIC_HART_SIZE 0x1000
 
 static uint32_t plic_read(void *opaque, uint32_t offset, int size_log2)
 {
