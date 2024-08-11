@@ -3,40 +3,58 @@ import os, sys, subprocess, ctypes
 from datetime import datetime
 
 LIBTEMU = '/tmp/libtemu.so'
-core = 'virtio.c pci.c fs.c cutils.c iomem.c simplefb.c json.c machine.c elf.c'.split()
+core = 'virtio.c pci.c fs.c cutils.c iomem.c simplefb.c elf.c'.split()
 graphics = 'sdl.c vga.c softfp.c'.split()
 machines = 'riscv_machine.c x86_cpu.c x86_machine.c'.split()
 hardware = 'vmmouse.c ps2.c ide.c fs_disk.c pckbd.c'.split()
 
 API = '''
 #include <unistd.h>
+#include <string.h>
+#include <stdio.h>
+#include <stdarg.h>
+
 #include "cutils.h"
 #include "iomem.h"
 #include "virtio.h"
 #include "machine.h"
 
-VirtMachine *vm;
+void __attribute__((format(printf, 1, 2))) vm_error(const char *fmt, ...) {
+	va_list ap;
+	va_start(ap, fmt);
+	vfprintf(stderr, fmt, ap);
+	va_end(ap);
+}
 
-void temu_load( const char *path ){
+VirtMachine *vm;
+#define MAX_EXEC_CYCLE 500000
+
+void temu_iterate(){
+	vm->vmc->virt_machine_interp(vm, MAX_EXEC_CYCLE);
+}
+
+void temu_load( const char *bios, int len ){
 	printf("temu_load:\\n");
-	printf("path:%s\\n",path);
 	VirtMachineParams _p;
 	VirtMachineParams *p = &_p;
 
-	virt_machine_set_defaults(p);
+	memset(p, 0, sizeof(*p));
 
 	p->machine_name = "riscv64";
-	p->vmc = virt_machine_find_class(p->machine_name);
-	if (!p->vmc) printf("ERROR: invalid machine type\\n");
+	p->vmc = &riscv_machine_class;
 	printf("vmc:%p\\n", p->vmc);
+	printf("vmc->virt_machine_set_defaults:%p\\n", p->vmc->virt_machine_set_defaults);
+	printf("vmc->virt_machine_init:%p\\n", p->vmc->virt_machine_init);
 	p->vmc->virt_machine_set_defaults(p);
-	printf("temu_load defaults OK:\\n");
 	p->ram_size = 100 << 20;
-	p->files[VM_FILE_BIOS].filename = strdup(path);
+	p->files[VM_FILE_BIOS].filename = strdup("/bios");
+	p->files[VM_FILE_BIOS].buf = malloc(len);
+	p->files[VM_FILE_BIOS].len = len;
+	memcpy(p->files[VM_FILE_BIOS].buf, bios, len);
+
 	p->width = 320;
 	p->height = 200;
-	printf("temu_load machine init:\\n");
-	vm = virt_machine_init(p);
+	vm = p->vmc->virt_machine_init(p);
 }
 '''
 
@@ -58,11 +76,8 @@ def compile(c, output=None, defs=None):
 		"-fPIC",  ## position indepenent code
 		'-DCONFIG_VERSION="%s"' % datetime.today().strftime('%Y-%m-%d'),
 		'-DCONFIG_SDL', '-DCONFIG_RISCV_MAX_XLEN=128', 
-		#'-DCONFIG_X86EMU', 
-		#'-DCONFIG_COMPRESSED_INITRAMFS',
-		"-o",
-		ofile,
-		c,
+		#'-DCONFIG_X86EMU', #'-DCONFIG_COMPRESSED_INITRAMFS',
+		"-o", ofile, c,
 	]
 	if defs: cmd += defs
 	print(cmd)
@@ -90,11 +105,17 @@ def build():
 	link(obs)
 
 def test():
+	elf = '/tmp/test.elf'
+	for arg in sys.argv:
+		if arg.endswith( ('.elf', '.bin') ): elf = arg
 	dll = ctypes.CDLL(LIBTEMU)
 	print(dll)
 	print(dll.temu_load)
-	dll.temu_load.argtypes = [ctypes.c_char_p]
-	dll.temu_load("hello world".encode('utf-8'))
+	dll.temu_load.argtypes = [ctypes.c_char_p, ctypes.c_int]
+	elf = open(elf,'rb').read()
+	dll.temu_load(elf, len(elf))
+	while True:
+		dll.temu_iterate()
 
 if __name__=='__main__':
 	build()
