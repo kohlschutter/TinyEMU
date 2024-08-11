@@ -47,6 +47,7 @@
 //#define DUMP_EXCEPTIONS
 //#define DUMP_CSR
 //#define CONFIG_LOGFILE
+//#define ABORT_ON_FAIL
 
 #include "riscv_cpu_priv.h"
 
@@ -379,6 +380,9 @@ int target_read_slow(RISCVCPUState *s, mem_uint_t *pval,
             print_target_ulong(paddr);
             printf("\n");
 #endif
+#ifdef ABORT_ON_FAIL
+cpu_abort(s);
+#endif
             return 0;
         } else if (pr->is_ram) {
             tlb_idx = (addr >> PG_SHIFT) & (TLB_SIZE - 1);
@@ -427,6 +431,10 @@ int target_read_slow(RISCVCPUState *s, mem_uint_t *pval,
                 print_target_ulong(paddr);
                 printf(" width=%d bits\n", 1 << (3 + size_log2));
 #endif
+#ifdef ABORT_ON_FAIL
+cpu_abort(s);
+#endif
+
                 ret = 0;
             }
         }
@@ -466,6 +474,10 @@ int target_write_slow(RISCVCPUState *s, target_ulong addr,
             print_target_ulong(paddr);
             printf("\n");
 #endif
+#ifdef ABORT_ON_FAIL
+cpu_abort(s);
+#endif
+
         } else if (pr->is_ram) {
             phys_mem_set_dirty_bit(pr, paddr - pr->addr);
             tlb_idx = (addr >> PG_SHIFT) & (TLB_SIZE - 1);
@@ -515,6 +527,10 @@ int target_write_slow(RISCVCPUState *s, target_ulong addr,
                 print_target_ulong(paddr);
                 printf(" width=%d bits\n", 1 << (3 + size_log2));
 #endif
+#ifdef ABORT_ON_FAIL
+cpu_abort(s);
+#endif
+
             }
         }
     }
@@ -849,6 +865,10 @@ static int csr_read(RISCVCPUState *s, target_ulong *pval, uint32_t csr,
             printf("csr_read: invalid CSR=0x%x\n", csr);
         }
 #endif
+#ifdef ABORT_ON_FAIL
+cpu_abort(s);
+#endif
+
         *pval = 0;
         return -1;
     }
@@ -1013,6 +1033,10 @@ static int csr_write(RISCVCPUState *s, uint32_t csr, target_ulong val)
 #ifdef DUMP_INVALID_CSR
         printf("csr_write: invalid CSR=0x%x\n", csr);
 #endif
+#ifdef ABORT_ON_FAIL
+cpu_abort(s);
+#endif
+
         return -1;
     }
     return 0;
