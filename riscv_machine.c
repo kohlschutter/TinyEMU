@@ -64,6 +64,70 @@ typedef struct RISCVMachine {
     int virtio_count;
 } RISCVMachine;
 
+/*
+ https://github.com/qemu/qemu/blob/master/hw/riscv/virt.c
+
+static const MemMapEntry virt_memmap[] = {
+    [VIRT_DEBUG] =        {        0x0,         0x100 },
+    [VIRT_MROM] =         {     0x1000,        0xf000 },
+    [VIRT_TEST] =         {   0x100000,        0x1000 },
+    [VIRT_RTC] =          {   0x101000,        0x1000 },
+    [VIRT_CLINT] =        {  0x2000000,       0x10000 },
+    [VIRT_ACLINT_SSWI] =  {  0x2F00000,        0x4000 },
+    [VIRT_PCIE_PIO] =     {  0x3000000,       0x10000 },
+    [VIRT_PLATFORM_BUS] = {  0x4000000,     0x2000000 },
+    [VIRT_PLIC] =         {  0xc000000, VIRT_PLIC_SIZE(VIRT_CPUS_MAX * 2) },
+    [VIRT_APLIC_M] =      {  0xc000000, APLIC_SIZE(VIRT_CPUS_MAX) },
+    [VIRT_APLIC_S] =      {  0xd000000, APLIC_SIZE(VIRT_CPUS_MAX) },
+    [VIRT_UART0] =        { 0x10000000,         0x100 },
+    [VIRT_VIRTIO] =       { 0x10001000,        0x1000 },
+    [VIRT_FW_CFG] =       { 0x10100000,          0x18 },
+    [VIRT_FLASH] =        { 0x20000000,     0x4000000 },
+    [VIRT_IMSIC_M] =      { 0x24000000, VIRT_IMSIC_MAX_SIZE },
+    [VIRT_IMSIC_S] =      { 0x28000000, VIRT_IMSIC_MAX_SIZE },
+    [VIRT_PCIE_ECAM] =    { 0x30000000,    0x10000000 },
+    [VIRT_PCIE_MMIO] =    { 0x40000000,    0x40000000 },
+    [VIRT_DRAM] =         { 0x80000000,           0x0 },
+};
+*/
+
+#ifdef QEMU_VIRT
+    extern int __MOUSE__[3];
+    static uint32_t uart_read(void *opaque, uint32_t offset, int size_log2){ 
+        printf("TODO: uart_read: offset=%u size_log2=%i\n", offset, size_log2);
+        #ifdef ABORT_ON_FAIL
+            abort();
+        #endif
+        return 0;
+    }
+    static void uart_write(void *opaque, uint32_t offset, uint32_t val, int size_log2) {
+        printf("TODO: uart_write: offset=%u val=%u size_log2=%i \n", offset, val, size_log2);
+        printf("%c", (char)val );
+    }
+    static uint32_t debug_read(void *opaque, uint32_t offset, int size_log2){ 
+        printf("TODO: debug_read: offset=%u size_log2=%i \n", offset, size_log2);
+        printf("__MOUSE__ : %i %i %i\n", __MOUSE__[0], __MOUSE__[1], __MOUSE__[2]);
+        if (offset <= 2) return __MOUSE__[offset];
+        return 0;
+    }
+    static void debug_write(void *opaque, uint32_t offset, uint32_t val, int size_log2) {}
+
+
+    static uint32_t pcie_read(void *opaque, uint32_t offset, int size_log2){ return 0;}
+    static void pcie_write(void *opaque, uint32_t offset, uint32_t val, int size_log2) {}
+    static uint32_t pcie_mmio_read(void *opaque, uint32_t offset, int size_log2){ return 0;}
+    static void pcie_mmio_write(void *opaque, uint32_t offset, uint32_t val, int size_log2) {}
+    static uint32_t test_read(void *opaque, uint32_t offset, int size_log2){ return 0;}
+    static void test_write(void *opaque, uint32_t offset, uint32_t val, int size_log2) {}
+    static uint32_t rtc_read(void *opaque, uint32_t offset, int size_log2){ return 0;}
+    static void rtc_write(void *opaque, uint32_t offset, uint32_t val, int size_log2) {}
+    #define PLIC_BASE_ADDR 0xc000000
+    #define CLINT_SIZE 0x10000
+    #define VIRTIO_BASE_ADDR 0x10001000
+    #define FRAMEBUFFER_BASE_ADDR 0x50000000
+
+#endif
+
 #ifndef LOW_RAM_SIZE
     #define LOW_RAM_SIZE   0x00010000 /* 64KB */
 #endif
@@ -104,6 +168,7 @@ typedef struct RISCVMachine {
 #ifndef PLIC_HART_SIZE
     #define PLIC_HART_SIZE 0x1000
 #endif
+
 
 #define RTC_FREQ 10000000
 #define RTC_FREQ_DIV 16 /* arbitrary, relative to CPU freq to have a
@@ -221,6 +286,7 @@ static void htif_poll(RISCVMachine *s)
     }
 }
 #endif
+
 
 static uint32_t clint_read(void *opaque, uint32_t offset, int size_log2)
 {
@@ -347,8 +413,8 @@ static uint8_t *get_ram_ptr(RISCVMachine *s, uint64_t paddr, BOOL is_rw)
 
 /* FDT machine description */
 
-#define FDT_MAGIC	0xd00dfeed
-#define FDT_VERSION	17
+#define FDT_MAGIC   0xd00dfeed
+#define FDT_VERSION 17
 
 struct fdt_header {
     uint32_t magic;
@@ -368,11 +434,11 @@ struct fdt_reserve_entry {
        uint64_t size;
 };
 
-#define FDT_BEGIN_NODE	1
-#define FDT_END_NODE	2
-#define FDT_PROP	3
-#define FDT_NOP		4
-#define FDT_END		9
+#define FDT_BEGIN_NODE  1
+#define FDT_END_NODE    2
+#define FDT_PROP    3
+#define FDT_NOP     4
+#define FDT_END     9
 
 typedef struct {
     uint32_t *tab;
@@ -954,7 +1020,6 @@ static VirtMachine *riscv_machine_init(const VirtMachineParams *p)
     /* RAM */
     ram_flags = 0;
     cpu_register_ram(s->mem_map, RAM_BASE_ADDR, p->ram_size, ram_flags);
-    cpu_register_ram(s->mem_map, 0x00000000, LOW_RAM_SIZE, 0);
     s->rtc_real_time = p->rtc_real_time;
     if (p->rtc_real_time) {
         s->rtc_start_time = rtc_get_real_time(s);
@@ -964,6 +1029,22 @@ static VirtMachine *riscv_machine_init(const VirtMachineParams *p)
                         clint_read, clint_write, DEVIO_SIZE32);
     cpu_register_device(s->mem_map, PLIC_BASE_ADDR, PLIC_SIZE, s,
                         plic_read, plic_write, DEVIO_SIZE32);
+
+#ifdef QEMU_VIRT
+    //cpu_register_device(s->mem_map, 0x40000000, 0x40000000, s, pcie_mmio_read, pcie_mmio_write, DEVIO_SIZE32); // VIRT_PCIE_MMIO
+    cpu_register_device(s->mem_map, 0x40000000, 0x500, s, pcie_mmio_read, pcie_mmio_write, DEVIO_SIZE8); // VIRT_PCIE_MMIO
+    cpu_register_device(s->mem_map, 0x40000500, 0x2000, s, pcie_mmio_read, pcie_mmio_write, DEVIO_SIZE16); // VIRT_PCIE_MMIO - TODO whats the vga range?
+    cpu_register_device(s->mem_map, 0x30000000, 0x10000000, s, pcie_read, pcie_write, DEVIO_SIZE32); // VIRT_PCIE_ECAM
+    cpu_register_device(s->mem_map, 0x10000000, 0x100, s, uart_read, uart_write, DEVIO_SIZE8); // VIRT_UART0
+    cpu_register_device(s->mem_map, 0x101000, 0x1000, s, rtc_read, rtc_write, DEVIO_SIZE32); // VIRT_RTC
+    cpu_register_device(s->mem_map, 0x100000, 0x1000, s, test_read, test_write, DEVIO_SIZE32); // VIRT_TEST
+    cpu_register_device(s->mem_map, 0xf000, 0x2000, s, debug_read, debug_write, DEVIO_SIZE32); // VIRT_DEBUG
+    cpu_register_ram(s->mem_map, 0x00000000, 0xf000, 0);  // VIRT_MROM 61440
+    //cpu_register_ram(s->mem_map, 0x00000000, 0x2000, 0);  // 8192 min required
+#else
+    cpu_register_ram(s->mem_map, 0x00000000, LOW_RAM_SIZE, 0);
+#endif
+
     for(i = 1; i < 32; i++) {
         irq_init(&s->plic_irq[i], plic_set_irq, s, i);
     }
