@@ -2,6 +2,16 @@
 import os, sys, subprocess, ctypes, time
 from datetime import datetime
 
+## note: mouse debug starts at 0xf000
+## mouse example: debug_get_mouse(0) returns X
+MOUSE_C = '''
+int debug_get_mouse(u32 idx){
+	u32 *ptr = (volatile u32*)0xf000;
+	return ptr[idx];
+}
+'''
+
+
 LIBTEMU = '/tmp/libtemu.so'
 core = 'virtio.c pci.c fs.c cutils.c iomem.c simplefb.c elf.c'.split()
 graphics = 'sdl.c vga.c softfp.c'.split()
@@ -228,12 +238,17 @@ static const MemMapEntry virt_memmap[] = {
     [VIRT_PCIE_MMIO] =    { 0x40000000,    0x40000000 },
     [VIRT_DRAM] =         { 0x80000000,           0x0 },
 };
-'''
 
-QEMU_VIRT = [
-	#'PLIC_BASE_ADDR=0x40000000',
-	'FRAMEBUFFER_BASE_ADDR=0x30000000',
-]
+./riscv_machine.c
+cpu_register_device(s->mem_map, 0x40000000, 0x500, s, pcie_mmio_read, pcie_mmio_write, DEVIO_SIZE8); // VIRT_PCIE_MMIO
+cpu_register_device(s->mem_map, 0x40000500, 0x2000, s, pcie_mmio_read, pcie_mmio_write, DEVIO_SIZE16); // VIRT_PCIE_MMIO - TODO whats the vga range?
+cpu_register_device(s->mem_map, 0x30000000, 0x10000000, s, pcie_read, pcie_write, DEVIO_SIZE32); // VIRT_PCIE_ECAM
+cpu_register_device(s->mem_map, 0x10000000, 0x100, s, uart_read, uart_write, DEVIO_SIZE8); // VIRT_UART0
+cpu_register_device(s->mem_map, 0x101000, 0x1000, s, rtc_read, rtc_write, DEVIO_SIZE32); // VIRT_RTC
+cpu_register_device(s->mem_map, 0x100000, 0x1000, s, test_read, test_write, DEVIO_SIZE32); // VIRT_TEST
+cpu_register_device(s->mem_map, 0xf000, 0x2000, s, debug_read, debug_write, DEVIO_SIZE32); // VIRT_DEBUG
+cpu_register_ram(s->mem_map, 0x00000000, 0xf000, 0);  // VIRT_MROM 61440
+'''
 
 def compile(c, output=None, defs=None):
 	if output:
@@ -246,14 +261,16 @@ def compile(c, output=None, defs=None):
 		'-I./',
 		"-c",  ## do not call the linker
 		"-fPIC",  ## position indepenent code
+		'-DQEMU_VIRT',
 		'-DCONFIG_VERSION="%s"' % datetime.today().strftime('%Y-%m-%d'),
 		'-DCONFIG_SDL', '-DCONFIG_RISCV_MAX_XLEN=128', 
 		'-DDUMP_INVALID_MEM_ACCESS', '-DDUMP_MMU_EXCEPTIONS',
-		'-DDUMP_INTERRUPTS', '-DDUMP_INVALID_CSR',
+		'-DDUMP_INTERRUPTS', '-DDUMP_INVALID_CSR', '-DDEBUG_VBE',
 		'-DDUMP_EXCEPTIONS', '-DDUMP_CSR', '-DDEBUG_VGA_REG', 
 		'-DABORT_ON_FAIL',
 		#'-DCONFIG_X86EMU', #'-DCONFIG_COMPRESSED_INITRAMFS',
-		] + ['-D'+d for d in QEMU_VIRT] + ["-o", ofile, c ]
+		"-o", ofile, c 
+	]
 	if defs: cmd += defs
 	print(cmd)
 	subprocess.check_call(cmd)
