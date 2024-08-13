@@ -1038,8 +1038,8 @@ static VirtMachine *riscv_machine_init(const VirtMachineParams *p)
     cpu_register_device(s->mem_map, 0x10000000, 0x100, s, uart_read, uart_write, DEVIO_SIZE8); // VIRT_UART0
     cpu_register_device(s->mem_map, 0x101000, 0x1000, s, rtc_read, rtc_write, DEVIO_SIZE32); // VIRT_RTC
     cpu_register_device(s->mem_map, 0x100000, 0x1000, s, test_read, test_write, DEVIO_SIZE32); // VIRT_TEST
-    cpu_register_device(s->mem_map, 0xf000, 0x2000, s, debug_read, debug_write, DEVIO_SIZE32); // VIRT_DEBUG
-    cpu_register_ram(s->mem_map, 0x00000000, 0xf000, 0);  // VIRT_MROM 61440
+    cpu_register_device(s->mem_map, 0x11000, 0x1000, s, debug_read, debug_write, DEVIO_SIZE32); // VIRT_DEBUG
+    cpu_register_ram(s->mem_map, 0x00000000, 0x10000, 0);  // VIRT_MROM 65K
     //cpu_register_ram(s->mem_map, 0x00000000, 0x2000, 0);  // 8192 min required
 #else
     cpu_register_ram(s->mem_map, 0x00000000, LOW_RAM_SIZE, 0);
