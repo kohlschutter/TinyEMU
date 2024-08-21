@@ -296,11 +296,11 @@ static void sdl_handle_key_event(const SDL_KeyboardEvent *ev, VirtMachine *m)
     }
 }
 
+int __MOUSE__[3] = {};
 static void sdl_send_mouse_event(VirtMachine *m, int x1, int y1,
                                  int dz, int state, BOOL is_absolute)
 {
     int buttons, x, y;
-
     buttons = 0;
     if (state & SDL_BUTTON(SDL_BUTTON_LEFT))
         buttons |= (1 << 0);
@@ -315,6 +315,10 @@ static void sdl_send_mouse_event(VirtMachine *m, int x1, int y1,
         x = x1;
         y = y1;
     }
+    //printf("mouse: %i %i %i\n", x1,y1, buttons);
+    __MOUSE__[0] = x1;
+    __MOUSE__[1] = y1;
+    __MOUSE__[2] = buttons;
     vm_send_mouse_event(m, x, y, dz, buttons);
 }
 
